@@ -37,6 +37,7 @@ func main() {
 
 	// pool initialization
 	pool, _ := ants.NewPool(svcConfig.MinPool)
+	defer pool.Release()
 
 	// auto tune ygy
 	go AutoTunePool(pool, svcConfig, &wg)
@@ -45,7 +46,7 @@ func main() {
 	for i := 0; i < numberOfTasks; i++ {
 		pool.Submit(
 			func() {
-				DoHeavyTask(&wg, i)
+				DoHeavyTask(&wg)
 			},
 		)
 
@@ -61,31 +62,26 @@ func AutoTunePool(pool *ants.Pool, svcConfig SvcConfig, wg *sync.WaitGroup) {
 	duration, _ := time.ParseDuration(svcConfig.AutoTunePool)
 	wg.Add(1)
 	for {
-		if int(atomic.LoadInt32(&runningTasks)) >= (pool.Cap() - 1) {
+		if int(atomic.LoadInt32(&runningTasks)) >= (pool.Cap()-1) &&
+			pool.Cap()+svcConfig.PoolIncrement <= svcConfig.MaxPool {
 			// tune pool
-			if pool.Cap()+svcConfig.PoolIncrement <= svcConfig.MaxPool {
-
-				newPool := pool.Cap() + svcConfig.PoolIncrement
-				pool.Tune(uint(newPool))
-				fmt.Println("Pool cap configured to ", pool.Cap())
-			}
+			newPool := pool.Cap() + svcConfig.PoolIncrement
+			pool.Tune(uint(newPool))
+			fmt.Println("Pool cap configured to ", pool.Cap())
 		} else if pool.Cap()-svcConfig.PoolIncrement >= svcConfig.MinPool {
-
+			// tune pool
 			newPool := pool.Cap() - svcConfig.PoolIncrement
 			pool.Tune(uint(newPool))
 			fmt.Println("Pool cap configured to ", pool.Cap())
-
 		}
 		time.Sleep(duration)
 	}
 }
 
-func DoHeavyTask(wg *sync.WaitGroup, arg int) {
+func DoHeavyTask(wg *sync.WaitGroup) {
 	atomic.AddInt32(&runningTasks, 1)
 	wg.Add(1)
-	//fmt.Println("Task ", arg, " started")
 	time.Sleep(1 * time.Second)
-	//fmt.Println("Task ", arg, " finished")
 	atomic.AddInt32(&runningTasks, -1)
 	wg.Done()
 }
