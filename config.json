@@ -1,0 +1,6 @@
+{
+  "min_pool" : 10,
+  "max_pool" : 50,
+  "pool_increment" : 5,
+  "auto_tune_pool" : "100ms"
+}
